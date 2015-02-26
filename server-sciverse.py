@@ -1,6 +1,7 @@
 #!flask/bin/python
 from flask import Flask, url_for
 from urllib2 import Request, urlopen, URLError
+import json
 
 app = Flask(__name__)
 
@@ -17,29 +18,34 @@ def api_getAuthor(authFirst, authLast):
 def api_getAffiliation(affilName):
 	url = 'http://api.elsevier.com:80/content/search/affiliation?query='
 	url += 'affil(%s)&apiKey=%s' %(affilName, apiKey)
-	return sciverseResponse(url)
+	jsonAffil = sciverseResponse(url)
+	return parseAffiliation(jsonAffil)
+	
 
 @app.route('/api/getDocumentsByAuthor/<authorID>')
 def api_getDocumentsByAuthor(authorID):
-    	#todo
+		#todo
 	return sciverseResponse(url)
 
 @app.route('/api/getDocumentsByTitle/<DocTitle>')
 def api_getDocumentsByTitle(DocTitle):
-    	#todo
+		#todo
 	return sciverseResponse(url)
 
-
 def sciverseResponse(url):
-    request = Request(url)
-    try:
-	response = urlopen(request)
-	reply = response.read()
-	#todo parsing the information
-	return reply
-    except URLError, e:
-	return 'No response',e
-	
-if __name__ == '__main__':
-    app.run(debug=True)
+	# Get the dataset
+	request = Request(url)
+	try:
+		response = urlopen(request)
+		reply = response.read()
+		jsonAffil = json.loads(reply)
+		return jsonAffil
+	except URLError, e:
+		return 'No response',e
 
+def parseAffiliation(jsonAffil):
+	del jsonAffil['search-results']['link']
+	return json.dumps(jsonAffil)
+
+if __name__ == '__main__':
+	app.run(debug=True)
