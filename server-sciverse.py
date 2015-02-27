@@ -11,6 +11,9 @@ username = 'cmput402'
 password = 'qpskcnvb'
 apiKey= '6492f9c867ddf3e84baa10b5971e3e3d'
 
+class severError( Exception ): pass
+class malformedError( Exception ): pass
+
 # Authenticate for adapter use
 # ie) curl -v -u "cmput402:qpskcnvb" http://127.0.0.1:5000/api/getAuthor/<authFirst>&<authLast>
 def requires_auth(f):
@@ -33,26 +36,40 @@ def api_getAuthor(authFirst, authLast):
 	url = 'http://api.elsevier.com:80/content/search/author?query=authfirst(%s)' %authFirst
 	url += '%20and%20'
 	url += 'authlast(%s)&apiKey=%s' %(authLast, apiKey)
-	jsonReply = sciverseResponse(url)
-	return parseAuthor(jsonReply)
+	try:
+		jsonAffil = sciverseResponse(url)
+		return parseAuthor(jsonReply)
+	except severError as e:
+		return severErrorRequest()
+	except malformedError as e:
+		return malformedRequest()
 
 @app.route('/api/getAffiliation/<affilName>')
 @requires_auth
 def api_getAffiliation(affilName):
-	if (affilName == ""):
-		return malformedRequest()
-	else:
-		url = 'http://api.elsevier.com:80/content/search/affiliation?query='
-		url += 'affil(%s)&apiKey=%s' %(affilName, apiKey)
+	url = 'http://api.elsevier.com:80/content/search/affiliation?query='
+	url += 'affil(%s)&apiKey=%s' %(affilName, apiKey)
+	try:
 		jsonAffil = sciverseResponse(url)
 		return parseAffiliation(jsonAffil)
+	except severError as e:
+		return severErrorRequest()
+	except malformedError as e:
+		return malformedRequest()
 	
 
 @app.route('/api/getDocumentsByAuthor/<authorID>')
 @requires_auth
 def api_getDocumentsByAuthor(authorID):
+	try:
+		jsonAffil = sciverseResponse(url)
 		#todo
-	return sciverseResponse(url)
+		#return parseDocument(jsonAffil)
+		return jsonAffil
+	except severError as e:
+		return severErrorRequest()
+	except malformedError as e:
+		return malformedRequest()
 
 @app.route('/api/getDocumentsByTitle/<DocTitle>')
 @requires_auth
@@ -60,19 +77,28 @@ def api_getDocumentsByTitle(DocTitle):
 	url = 'http://api.elsevier.com:80/content/search/author?query=authfirst(%s)' %authFirst
 	url += '%20and%20'
 	url += 'authlast(%s)&apiKey=%s' %(authLast, apiKey)
-	jsonReply = sciverseResponse(url)
-	return parseAuthor(jsonReply)
+	try:
+		jsonAffil = sciverseResponse(url)
+		return parseAuthor(jsonReply)
+	except severError as e:
+		return severErrorRequest()
+	except malformedError as e:
+		return malformedRequest()
 
 def sciverseResponse(url):
 	# Get the dataset
 	request = Request(url)
 	try:
 		response = urlopen(request)
+		if(response.getcode() == 0):
+			# Internal server error on Scopus API
+			raise severError('500 - Internal Server Error')
 		reply = response.read()
 		jsonReply = json.loads(reply)
 		return jsonReply
 	except URLError, e:
-		return 'No response',e
+		# IO Error with urllib2
+		raise severError('500 - Internal Server Error')
 
 def parseAuthor(sciverse):
 	authorJson ={"authors": []}
@@ -133,19 +159,20 @@ def parseAuthor(sciverse):
 	#return json_data
 
 def parseAffiliation(jsonAffil):
+
 	class Affiliation(object):
-	    def __init__(self):
-	        self.scopus_affiliation_id = ""
-	        self.affiliation_name = ""
-	        self.document_count = 0
-	        self.author_count = 0
-	        self.city = ""
-	        self.state = ""
-	        self.country = ""
-	        self.postal_code = ""
-	        self.address = ""
-	        self.org_URL = ""
-	        self.scopus_link = ""
+		def __init__(self):
+			self.scopus_affiliation_id = ""
+			self.affiliation_name = ""
+			self.document_count = 0
+			self.author_count = 0
+			self.city = ""
+			self.state = ""
+			self.country = ""
+			self.postal_code = ""
+			self.address = ""
+			self.org_URL = ""
+			self.scopus_link = ""
 
 	res = {}
 	entry = []
@@ -154,9 +181,7 @@ def parseAffiliation(jsonAffil):
 		if newJsonAffil['search-results'].get('opensearch:totalResults'):
 			totalResults = newJsonAffil['search-results']['opensearch:totalResults']
 			res['totalResults'] = totalResults
-			if (totalResults == '0'):
-				return malformedRequest()
-			else:
+			if (totalResults != '0'):
 				for item in newJsonAffil['search-results']['entry']:
 					affil = Affiliation()
 					affil.scopus_affiliation_id = item.get('dc:identifier')
@@ -170,13 +195,10 @@ def parseAffiliation(jsonAffil):
 							if (link['@ref'] == 'scopus-affiliation'):
 								affil.scopus_link = link['@href']
 						entry.append(affil)
-					#TODO query other
+					#TODO query other affiliation api
 				res['affiliations'] = entry
-		else:
-			return malformedRequest()
-	else:
-		return malformedRequest()
-	return json.dumps(res, indent=4, default=jdefault)
+				return json.dumps(res, indent=4, default=jdefault)
+	raise malformedError('400 - Bad Request')
 
 def jdefault(o):
     return o.__dict__
@@ -188,6 +210,7 @@ def jdefault(o):
 def malformedRequest():
 	return handleError(400, 'Bad Request - The request could not be understood by the server due to malformed syntax')
 
+@app.errorhandler(500)
 def severErrorRequest():
 	return handleError(500, 'Internal Server Error - The server encountered an unexpected condition which prevented it from fulfilling the request')
 
