@@ -218,6 +218,10 @@ def severErrorRequest():
 def customBadUrl():
 	return badUrlRequest()
 
+@app.errorhandler(404)
+def customBadUrl
+	return badUrlRequest()
+
 def badUrlRequest():
 	return handleError(404, 'Not found - The server has not found anything matching the Request-URL')
 
