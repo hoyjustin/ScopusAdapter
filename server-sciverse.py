@@ -219,7 +219,7 @@ def customBadUrl():
 	return badUrlRequest()
 
 @app.errorhandler(404)
-def customBadUrl
+def customBadUrl():
 	return badUrlRequest()
 
 def badUrlRequest():
