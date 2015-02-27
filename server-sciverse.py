@@ -1,16 +1,34 @@
 #!flask/bin/python
-from flask import Flask, url_for, jsonify
+from flask import Flask, url_for, jsonify, request
 from urllib2 import Request, urlopen, URLError
+from functools import wraps
 import json
 
 app = Flask(__name__)
 
+# global passphrases
+username = 'cmput402'
+password = 'qpskcnvb'
 apiKey= '6492f9c867ddf3e84baa10b5971e3e3d'
 
-def jdefault(o):
-    return o.__dict__
+# Authenticate for adapter use
+# ie) curl -v -u "cmput402:qpskcnvb" http://127.0.0.1:5000/api/getAuthor/<authFirst>&<authLast>
+def requires_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth: 
+            return unauthorizedRequest()
+        elif not check_auth(auth.username, auth.password):
+            return unauthorizedRequest()
+        return f(*args, **kwargs)
+    return decorated
+
+def check_auth(usernameInput, passwordInput):
+    return (usernameInput == username) and (passwordInput == password)
 
 @app.route('/api/getAuthor/<authFirst>&<authLast>')
+@requires_auth
 def api_getAuthor(authFirst, authLast):
 	url = 'http://api.elsevier.com:80/content/search/author?query=authfirst(%s)' %authFirst
 	url += '%20and%20'
@@ -19,45 +37,31 @@ def api_getAuthor(authFirst, authLast):
 	return parseAuthor(jsonReply)
 
 @app.route('/api/getAffiliation/<affilName>')
+@requires_auth
 def api_getAffiliation(affilName):
 	if (affilName == ""):
 		return malformedRequest()
 	else:
 		url = 'http://api.elsevier.com:80/content/search/affiliation?query='
 		url += 'affil(%s)&apiKey=%s' %(affilName, apiKey)
-		print url
 		jsonAffil = sciverseResponse(url)
 		return parseAffiliation(jsonAffil)
 	
 
 @app.route('/api/getDocumentsByAuthor/<authorID>')
+@requires_auth
 def api_getDocumentsByAuthor(authorID):
 		#todo
 	return sciverseResponse(url)
 
 @app.route('/api/getDocumentsByTitle/<DocTitle>')
+@requires_auth
 def api_getDocumentsByTitle(DocTitle):
 	url = 'http://api.elsevier.com:80/content/search/author?query=authfirst(%s)' %authFirst
 	url += '%20and%20'
 	url += 'authlast(%s)&apiKey=%s' %(authLast, apiKey)
 	jsonReply = sciverseResponse(url)
 	return parseAuthor(jsonReply)
-
-@app.route('/api/getAuthor/')
-@app.route('/api/getAffiliation/')
-@app.route('/api/getDocumentsByAuthor/')
-@app.route('/api/getDocumentsByTitle/')
-def malformedRequest():
-	res = {}
-	errors = []
-	malformedMessage = {
-		'message': '400 - Bad Request - The request could not be understood by the server due to malformed syntax',
-	}
-	errors.append(malformedMessage)
-	res['errors'] = errors
-	resp = jsonify(res)
-	resp.status_code = 400
-	return resp
 
 def sciverseResponse(url):
 	# Get the dataset
@@ -174,6 +178,43 @@ def parseAffiliation(jsonAffil):
 		return malformedRequest()
 	return json.dumps(res, indent=4, default=jdefault)
 
+def jdefault(o):
+    return o.__dict__
+
+@app.route('/api/getAuthor/')
+@app.route('/api/getAffiliation/')
+@app.route('/api/getDocumentsByAuthor/')
+@app.route('/api/getDocumentsByTitle/')
+def malformedRequest():
+	return handleError(400, 'Bad Request - The request could not be understood by the server due to malformed syntax')
+
+def severErrorRequest():
+	return handleError(500, 'Internal Server Error - The server encountered an unexpected condition which prevented it from fulfilling the request')
+
+def badUrlRequest():
+	return handleError(404, 'Not found - The server has not found anything matching the Request-URL')
+
+@app.errorhandler(502)
+def badGatewayRequest():
+	return handleError(502, 'Bad gateway')
+
+def gatewayTimeoutRequest():
+	return handleError(504, 'Gateway timeout')
+
+def unauthorizedRequest():
+	return handleError(401, 'Unauthorized Request - Please authenticate using a correct user and password combination')
+
+def handleError(code, message):
+	res = {}
+	errors = []
+	malformedMessage = {
+		'message': "{0}{1}".format(code, ' - ' + message),
+	}
+	errors.append(malformedMessage)
+	res['errors'] = errors
+	resp = jsonify(res)
+	resp.status_code = code
+	return resp
 
 if __name__ == '__main__':
 	app.run(debug=True)
