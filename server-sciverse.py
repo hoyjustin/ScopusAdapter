@@ -45,7 +45,6 @@ def api_getAuthor(authFirst, authLast):
 		return malformedRequest()
 
 @app.route('/api/getAffiliation/<affilName>')
-@requires_auth
 def api_getAffiliation(affilName):
 	url = 'http://api.elsevier.com:80/content/search/affiliation?query='
 	url += 'affil(%s)&apiKey=%s' %(affilName, apiKey)
@@ -245,5 +244,6 @@ def handleError(code, message):
 	return resp
 
 if __name__ == '__main__':
+	#For debugging purposes
 	#app.run(debug=True)
-	app.run(host='0.0.0.0')
+	app.run(host='0.0.0.0', port=5000)
