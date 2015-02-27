@@ -1,5 +1,5 @@
 #!flask/bin/python
-from flask import Flask, url_for
+from flask import Flask, url_for, jsonify
 from urllib2 import Request, urlopen, URLError
 import json
 
@@ -20,11 +20,14 @@ def api_getAuthor(authFirst, authLast):
 
 @app.route('/api/getAffiliation/<affilName>')
 def api_getAffiliation(affilName):
-	url = 'http://api.elsevier.com:80/content/search/affiliation?query='
-	url += 'affil(%s)&apiKey=%s' %(affilName, apiKey)
-	print url
-	jsonAffil = sciverseResponse(url)
-	return parseAffiliation(jsonAffil)
+	if (affilName == ""):
+		return malformedRequest()
+	else:
+		url = 'http://api.elsevier.com:80/content/search/affiliation?query='
+		url += 'affil(%s)&apiKey=%s' %(affilName, apiKey)
+		print url
+		jsonAffil = sciverseResponse(url)
+		return parseAffiliation(jsonAffil)
 	
 
 @app.route('/api/getDocumentsByAuthor/<authorID>')
@@ -39,6 +42,22 @@ def api_getDocumentsByTitle(DocTitle):
 	url += 'authlast(%s)&apiKey=%s' %(authLast, apiKey)
 	jsonReply = sciverseResponse(url)
 	return parseAuthor(jsonReply)
+
+@app.route('/api/getAuthor/')
+@app.route('/api/getAffiliation/')
+@app.route('/api/getDocumentsByAuthor/')
+@app.route('/api/getDocumentsByTitle/')
+def malformedRequest():
+	res = {}
+	errors = []
+	malformedMessage = {
+		'message': '400 - Bad Request - The request could not be understood by the server due to malformed syntax',
+	}
+	errors.append(malformedMessage)
+	res['errors'] = errors
+	resp = jsonify(res)
+	resp.status_code = 400
+	return resp
 
 def sciverseResponse(url):
 	# Get the dataset
@@ -110,7 +129,6 @@ def parseAuthor(sciverse):
 	#return json_data
 
 def parseAffiliation(jsonAffil):
-	
 	class Affiliation(object):
 	    def __init__(self):
 	        self.scopus_affiliation_id = ""
@@ -132,7 +150,9 @@ def parseAffiliation(jsonAffil):
 		if newJsonAffil['search-results'].get('opensearch:totalResults'):
 			totalResults = newJsonAffil['search-results']['opensearch:totalResults']
 			res['totalResults'] = totalResults
-			if (totalResults != 0):
+			if (totalResults == '0'):
+				return malformedRequest()
+			else:
 				for item in newJsonAffil['search-results']['entry']:
 					affil = Affiliation()
 					affil.scopus_affiliation_id = item.get('dc:identifier')
@@ -146,10 +166,14 @@ def parseAffiliation(jsonAffil):
 							if (link['@ref'] == 'scopus-affiliation'):
 								affil.scopus_link = link['@href']
 						entry.append(affil)
+					#TODO query other
 				res['affiliations'] = entry
-
+		else:
+			return malformedRequest()
+	else:
+		return malformedRequest()
 	return json.dumps(res, indent=4, default=jdefault)
+
 
 if __name__ == '__main__':
 	app.run(debug=True)
-
