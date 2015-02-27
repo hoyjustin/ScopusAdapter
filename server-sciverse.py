@@ -214,6 +214,11 @@ def malformedRequest():
 def severErrorRequest():
 	return handleError(500, 'Internal Server Error - The server encountered an unexpected condition which prevented it from fulfilling the request')
 
+
+@app.errorhandler(404)
+def customBadUrl():
+	return badUrlRequest()
+
 def badUrlRequest():
 	return handleError(404, 'Not found - The server has not found anything matching the Request-URL')
 
@@ -240,4 +245,5 @@ def handleError(code, message):
 	return resp
 
 if __name__ == '__main__':
-	app.run(debug=True)
+	#app.run(debug=True)
+	app.run(host='0.0.0.0')
