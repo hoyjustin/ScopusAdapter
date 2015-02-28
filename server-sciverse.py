@@ -30,21 +30,21 @@ def check_auth(usernameInput, passwordInput):
     return (usernameInput == username) and (passwordInput == password)
 
 @app.route('/api/getAuthor/<authFirst>/<authLast>')
-#@requires_auth
+@requires_auth
 def api_getAuthorByFullName(authFirst, authLast):
 	if not validName(authFirst) or not validName(authLast):
 		return malformedRequest()
-
-	url = 'http://api.elsevier.com:80/content/search/author?query=authfirst(%s)%20and%20authlast(%s)&apiKey=%s' %(authFirst, authLast, apiKey)
+	url = 'http://api.elsevier.com:80/content/search/author?query=authfirst(%s)' %(authFirst)
+	url += '%20and%20'
+	url += 'authlast(%s)&apiKey=%s' %(authLast, apiKey)
 	jsonReply = sciverseResponse(url, False)
 	return parseAuthor(jsonReply)
     
 @app.route('/api/getAuthor/<authLast>')
-#@requires_auth
+@requires_auth
 def api_getAuthorByLastName(authLast):
 	if not validName(authLast):
 		return malformedRequest()
-
 	url = 'http://api.elsevier.com:80/content/search/author?query=authlast(%s)&apiKey=%s' %(authLast, apiKey)
 	jsonReply = sciverseResponse(url)
 	return parseAuthor(jsonReply)
@@ -63,16 +63,16 @@ def api_getAffiliation(affilName):
 		return malformedRequest()
 
 @app.route('/api/getDocumentsByAuthorID/<authorID>')
-#@requires_auth
+@requires_auth
 def api_getDocumentsByAuthorID(authorID):
-	url = 'http://api.elsevier.com:80/content/search/author?query=authfirst(%s)' %authFirst
-	url += '%20and%20'
-	url += 'authlast(%s)&apiKey=%s' %(authLast, apiKey)
-	jsonReply = sciverseResponse(url)
-	return parseDocumentsByAuthorID(jsonReply)
+	url = 'http://api.elsevier.com:80/content/search/scopus?query=AU-ID(%s)' %(authorID)
+	url+= '%20'
+	url += '&apiKey=%s' %(apiKey)
+	jsonReply = sciverseResponse(url, False)
+	return parseDocuments(jsonReply)
 
 @app.route('/api/getDocumentsByTitle/<DocTitle>')
-#@requires_auth
+@requires_auth
 def api_getDocumentsByTitle(DocTitle):
 	url = 'http://api.elsevier.com:80/content/search/scopus?query=title(%s)' %(DocTitle)
 	url += '&apiKey=%s' %(apiKey)
@@ -95,7 +95,7 @@ def url_fix(s, charset='utf-8'):
     return urlparse.urlunsplit((scheme, netloc, path, qs, anchor))
 
 def sciverseResponse(url, urlfix=True):
-	# Get the dataset
+        #if contained unicode character, fix the url
         if urlfix:
 	    url = url_fix(url)
 	request = Request(url)
@@ -229,67 +229,6 @@ def parseDocuments(sciverse):
 
 	results["entry"] = entry
 	return json.dumps(results, indent=4, default=jdefault)
-
-def parseDocumentsByAuthorID(sciverse):
-	class AuthorDoc(object):
-	    def __init__(self):
-	    	self.scopus_document_uid= ""
-	        self.scopus_eid = ""
-	        self.title= ""
-	        self.authors= [ {self.given_name: "",
-              				 self.surname: ""}]
-	        self.publicationName = ""
-	        self.issn = ""
-	        self.volume = ""
-	        self.issueIdentifier = ""
-	        self.pageRange = 0
-	        self.coverDate= ""
-	        self.coverDisplayDate = ""
-	        self.doi= ""
-	        self.citedby_count = 0
-	        self.affiliation=[]
-	        self.aggregationType =""
-	        self.subtypeDescription =""
-	        self.link=""
-
-	
-	results = {}
-	entry =[]
-
-	if (sciverse.get("search-results")):
-		totalResults  = sciverse.get("search-results")
-		results["totalResults"] = totalResults.get("opensearch:totalResults")
-
-		if (totalResults != 0):
-			for sciverseItem in totalResults.get('entry'):
-				authorDoc = AuthorDoc()
-				#shortcut names
-				sciverseAffiliation = sciverseItem.get('affiliation-current',{} )
-				sciverseName = sciverseItem.get('preferred-name',{})
-				sciverseSubject = sciverseItem.get('subject-area',{})
-
-				#setinfo
-				authorDoc.scopus_eid = sciverseItem.get("eid")
-				authorDoc.scopus_author_uid = sciverseItem.get('dc:identifier')
-				authorDoc.surname = sciverseName.get('surname')
-				authorDoc.given_name = sciverseName.get('given-name')
-				authorDoc.initials = sciverseName.get('initials')
-				authorDoc.document_count = sciverseItem.get("document-count")
-				authorDoc.scopus_affil_uid = sciverseAffiliation.get("affiliation-id")
-				authorDoc.affil_name = sciverseAffiliation.get("affiliation-name")
-				authorDoc.affil_city = sciverseAffiliation.get("affiliation-city")
-				authorDoc.affil_country = sciverseAffiliation.get("affiliation-country")
-				for sciverseSubject_iter in sciverseSubject:
-					setSubject ={}
-					setSubject["number-of-document"] = sciverseSubject_iter.get("@frequency")
-					setSubject["subject"] = sciverseSubject_iter.get("$")
-					#add to subject-area list in json
-					authorDoc.subject_area.append(setSubject)
-				entry.append(authorDoc)
-
-	results["entry"] = entry
-	return json.dumps(results, indent=4, default=jdefault)
-
 
 def parseAffil(jsonAffil):
 	class Affiliation(object):
