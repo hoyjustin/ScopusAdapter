@@ -12,7 +12,8 @@ password = 'qpskcnvb'
 apiKey= '6492f9c867ddf3e84baa10b5971e3e3d'
 
 class severError( Exception ): pass
-class malformedError( Exception ): pass
+class gatewayError( Exception ): pass
+class gatewayTimedOutError( Exception ): pass
 
 # Authenticate for adapter use
 # ie) curl -v -u "cmput402:qpskcnvb" http://127.0.0.1:5000/api/getAuthor/<authFirst>&<authLast>
@@ -39,10 +40,12 @@ def api_getAuthor(authFirst, authLast):
 	try:
 		jsonAffil = sciverseResponse(url)
 		return parseAuthor(jsonReply)
-	except severError as e:
+	except severError as e1:
 		return severErrorRequest()
-	except malformedError as e:
-		return malformedRequest()
+	except gatewayError as e2:
+		return badGatewayRequest()
+	except gatewayTimedOutError as e3:
+		return gatewayTimeoutRequest()
 
 @app.route('/api/getAffiliation/<affilName>')
 @requires_auth
@@ -52,10 +55,12 @@ def api_getAffiliation(affilName):
 	try:
 		jsonAffil = sciverseResponse(url)
 		return parseAffiliation(jsonAffil)
-	except severError as e:
+	except severError as e1:
 		return severErrorRequest()
-	except malformedError as e:
-		return malformedRequest()
+	except gatewayError as e2:
+		return badGatewayRequest()
+	except gatewayTimedOutError as e3:
+		return gatewayTimeoutRequest()
 	
 
 @app.route('/api/getDocumentsByAuthor/<authorID>')
@@ -66,10 +71,12 @@ def api_getDocumentsByAuthor(authorID):
 		#todo
 		#return parseDocument(jsonAffil)
 		return jsonAffil
-	except severError as e:
+	except severError as e1:
 		return severErrorRequest()
-	except malformedError as e:
-		return malformedRequest()
+	except gatewayError as e2:
+		return badGatewayRequest()
+	except gatewayTimedOutError as e3:
+		return gatewayTimeoutRequest()
 
 @app.route('/api/getDocumentsByTitle/<DocTitle>')
 @requires_auth
@@ -80,10 +87,13 @@ def api_getDocumentsByTitle(DocTitle):
 	try:
 		jsonAffil = sciverseResponse(url)
 		return parseAuthor(jsonReply)
-	except severError as e:
+	except severError as e1:
 		return severErrorRequest()
-	except malformedError as e:
-		return malformedRequest()
+	except gatewayError as e2:
+		return badGatewayRequest()
+	except gatewayTimedOutError as e3:
+		return gatewayTimeoutRequest()
+
 
 def sciverseResponse(url):
 	# Get the dataset
@@ -93,6 +103,12 @@ def sciverseResponse(url):
 		if(response.getcode() == 0):
 			# Internal server error on Scopus API
 			raise severError('500 - Internal Server Error')
+		if(response.getcode() == 502):
+			# Bad gatway error on Scopus API
+			raise gatewayError('502 - Bad Gateway Error')
+		if(response.getcode() == 502):
+			# Timed out error on Scopus API
+			raise gatewayTimedOutError('504 - Gateway Timed Out')
 		reply = response.read()
 		jsonReply = json.loads(reply)
 		return jsonReply
@@ -197,8 +213,7 @@ def parseAffiliation(jsonAffil):
 						entry.append(affil)
 					#TODO query other affiliation api
 				res['affiliations'] = entry
-				return json.dumps(res, indent=4, default=jdefault)
-	raise malformedError('400 - Bad Request')
+	return json.dumps(res, indent=4, default=jdefault)
 
 def jdefault(o):
     return o.__dict__
@@ -211,13 +226,23 @@ def malformedRequest():
 	return handleError(400, 'Bad Request - The request could not be understood by the server due to malformed syntax')
 
 @app.errorhandler(500)
+def customServerError(e):
+	return severErrorRequest()
+
 def severErrorRequest():
 	return handleError(500, 'Internal Server Error - The server encountered an unexpected condition which prevented it from fulfilling the request')
+
+@app.errorhandler(404)
+def customBadUrl(e):
+	return badUrlRequest()
 
 def badUrlRequest():
 	return handleError(404, 'Not found - The server has not found anything matching the Request-URL')
 
 @app.errorhandler(502)
+def customBadGateway(e):
+	return badGatewayRequest()
+
 def badGatewayRequest():
 	return handleError(502, 'Bad gateway')
 
