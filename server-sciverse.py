@@ -45,12 +45,13 @@ def api_getAuthor(authFirst, authLast):
 		return malformedRequest()
 
 @app.route('/api/getAffiliation/<affilName>')
+@requires_auth
 def api_getAffiliation(affilName):
 	url = 'http://api.elsevier.com:80/content/search/affiliation?query='
 	url += 'affil(%s)&apiKey=%s' %(affilName, apiKey)
 	try:
 		jsonAffil = sciverseResponse(url)
-		return parseAffiliation(jsonAffil)
+		return parseAffil(jsonAffil)
 	except severError as e:
 		return severErrorRequest()
 	except malformedError as e:
@@ -157,7 +158,7 @@ def parseAuthor(sciverse):
 	return json_data
 	#return json_data
 
-def parseAffiliation(jsonAffil):
+def parseAffil(jsonAffil):
 
 	class Affiliation(object):
 		def __init__(self):
@@ -177,27 +178,42 @@ def parseAffiliation(jsonAffil):
 	entry = []
 	newJsonAffil = jsonAffil.copy()
 	if newJsonAffil.get('search-results'):
-		if newJsonAffil['search-results'].get('opensearch:totalResults'):
-			totalResults = newJsonAffil['search-results']['opensearch:totalResults']
-			res['totalResults'] = totalResults
-			if (totalResults != '0'):
-				for item in newJsonAffil['search-results']['entry']:
-					affil = Affiliation()
-					affil.scopus_affiliation_id = item.get('dc:identifier')
-					affil.affiliation_name = item.get('affiliation-name')
-					affil.document_count = item.get('document-count')
-					affil.author_count = item.get('affiliation-name')
-					affil.city = item.get('city')
-					affil.country = item.get('country')
-					if (item.get('link')):
-						for link in item['link']:
-							if (link['@ref'] == 'scopus-affiliation'):
-								affil.scopus_link = link['@href']
-						entry.append(affil)
-					#TODO query other affiliation api
-				res['affiliations'] = entry
-				return json.dumps(res, indent=4, default=jdefault)
+		totalResults = newJsonAffil['search-results'].get('opensearch:totalResults', 0)
+		res['totalResults'] = totalResults
+		if (totalResults != '0'):
+			for item in newJsonAffil['search-results']['entry']:
+				affil = Affiliation()
+				affilId = item.get('dc:identifier').replace('AFFILIATION_ID:', '', 1)
+				affil.scopus_affiliation_id = affilId
+				affil.affiliation_name = item.get('affiliation-name', '')
+				affil.document_count = item.get('document-count', '')
+				affil.author_count = item.get('affiliation-name', '')
+				affil.city = item.get('city', '')
+				affil.country = item.get('country', '')
+				if (item.get('link')):
+					for link in item['link']:
+						if (link['@ref'] == 'scopus-affiliation'):
+							affil.scopus_link = link.get('@href', '')
+				try:
+					if(affilId != ''):
+						parseRetrievalAffil(affil, affilId)
+				except Exception as e:
+					pass
+				entry.append(affil)
+			res['affiliations'] = entry
+			return json.dumps(res, indent=4, default=jdefault)
 	raise malformedError('400 - Bad Request')
+
+def parseRetrievalAffil(affil, affilId):
+	authorRetrievalUrl = 'http://api.elsevier.com:80/content/affiliation/affiliation_id/%s?' %affilId
+	authorRetrievalUrl += 'apiKey=%s' %apiKey
+	jsonAffilRetrieval = sciverseResponse(authorRetrievalUrl)
+	newJsonRetrievalAffil = jsonAffilRetrieval.copy()
+	if newJsonRetrievalAffil.get('affiliation-retrieval-response'):
+		affil.address = newJsonRetrievalAffil['affiliation-retrieval-response'].get('address', '')
+		if newJsonRetrievalAffil['affiliation-retrieval-response'].get('institution-profile'):
+			affil.postal_code = newJsonRetrievalAffil['affiliation-retrieval-response']['institution-profile'].get('postal-code', '')
+			affil.org_URL = newJsonRetrievalAffil['affiliation-retrieval-response']['institution-profile'].get('org-URL', '')
 
 def jdefault(o):
     return o.__dict__
@@ -213,13 +229,8 @@ def malformedRequest():
 def severErrorRequest():
 	return handleError(500, 'Internal Server Error - The server encountered an unexpected condition which prevented it from fulfilling the request')
 
-
 @app.errorhandler(404)
-def customBadUrl():
-	return badUrlRequest()
-
-@app.errorhandler(404)
-def customBadUrl
+def customBadUrl(e):
 	return badUrlRequest()
 
 def badUrlRequest():
@@ -248,6 +259,6 @@ def handleError(code, message):
 	return resp
 
 if __name__ == '__main__':
-	#For debugging purposes
-	#app.run(debug=True)
-	app.run(host='0.0.0.0', port=5000)
+	#To start a local development server for debugging purposes
+	app.run(debug=True)
+	#app.run(host='0.0.0.0', port=5000)
