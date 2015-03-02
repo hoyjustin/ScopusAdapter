@@ -331,7 +331,7 @@ def jdefault(o):
 
 @app.route('/api/getAuthor/')
 @app.route('/api/getAffiliation/')
-@app.route('/api/getDocumentsByAuthor/')
+@app.route('/api/getDocumentsByAuthorID/')
 @app.route('/api/getDocumentsByTitle/')
 def malformedRequest():
 	return handleError(400, 'Bad Request - The request could not be understood by the server due to malformed syntax')
