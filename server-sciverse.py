@@ -36,82 +36,38 @@ def check_auth(usernameInput, passwordInput):
 @app.route('/api/getAuthor/<authFirst>/<authLast>')
 @requires_auth
 def api_getAuthorByFullName(authFirst, authLast):
-	if not validName(authFirst) or not validName(authLast):
-		return malformedRequest()
 	url = 'http://api.elsevier.com:80/content/search/author?query=authfirst(%s)' %(authFirst)
-	url += '%20and%20'
+	url += '%20and%20' 
 	url += 'authlast(%s)&apiKey=%s' %(authLast, apiKey)
-	try:
-		jsonReply = sciverseResponse(url, False)
-		return parseAuthor(jsonReply)
-	except severError as e1:
-		return severErrorRequest()
-	except gatewayError as e2:
-		return badGatewayRequest()
-	except gatewayTimedOutError as e3:
-		return gatewayTimeoutRequest()
-    
+	#because sciverse contains urlencoding (ie.%20), we do not urlencode this url
+	return Response(url, "author", False)
+
 @app.route('/api/getAuthor/<authLast>')
 @requires_auth
 def api_getAuthorByLastName(authLast):
-	if not validName(authLast):
-		return malformedRequest()
-	url = 'http://api.elsevier.com:80/content/search/author?query=authlast(%s)&apiKey=%s' %(authLast, apiKey)
- 	try:
-		jsonReply = sciverseResponse(url)
-		return parseAuthor(jsonReply)
-	except severError as e1:
-		return severErrorRequest()
-	except gatewayError as e2:
-		return badGatewayRequest()
-	except gatewayTimedOutError as e3:
-		return gatewayTimeoutRequest()
+	url = 'http://api.elsevier.com:80/content/search/author?query=authlast(%s)&apiKey=%s' \
+		%(authLast, apiKey)
+ 	return Response(url, "author")
 
-@app.route('/api/getAffiliation/<affilName>')
+@app.route('/api/getInstitution/<InstitutionName>')
 @requires_auth
-def api_getAffiliation(affilName):
-	url = 'http://api.elsevier.com:80/content/search/affiliation?query='
- 	url += 'affil(%s)&apiKey=%s' %(affilName, apiKey)
- 	try:
- 		jsonAffil = sciverseResponse(url)
-		return parseAffil(jsonAffil)
-	except severError as e1:
-		return severErrorRequest()
-	except gatewayError as e2:
-		return badGatewayRequest()
-	except gatewayTimedOutError as e3:
-		return gatewayTimeoutRequest()
+def api_getInstitution(InstitutionName):
+	url = 'http://api.elsevier.com:80/content/search/affiliation?query=affil(%s)&apiKey=%s' \
+		%(InstitutionName, apiKey)
+ 	return Response(url, "institute")
 
 @app.route('/api/getDocumentsByAuthorID/<authorID>')
 @requires_auth
 def api_getDocumentsByAuthorID(authorID):
 	url = 'http://api.elsevier.com:80/content/search/scopus?query=AU-ID(%s)' %(authorID)
-	url+= '%20'
 	url += '&apiKey=%s' %(apiKey)
-	try:
-		jsonReply = sciverseResponse(url, False)
-		return parseDocuments(jsonReply)
-	except severError as e1:
-		return severErrorRequest()
-	except gatewayError as e2:
-		return badGatewayRequest()
-	except gatewayTimedOutError as e3:
-		return gatewayTimeoutRequest()
+	return Response(url, "documents")
 
 @app.route('/api/getDocumentsByTitle/<DocTitle>')
 @requires_auth
 def api_getDocumentsByTitle(DocTitle):
-	url = 'http://api.elsevier.com:80/content/search/scopus?query=title(%s)' %(DocTitle)
-	url += '&apiKey=%s' %(apiKey)
-	try:
-		jsonReply = sciverseResponse(url)
-		return parseDocuments(jsonReply)
-	except severError as e1:
-		return severErrorRequest()
-	except gatewayError as e2:
-		return badGatewayRequest()
-	except gatewayTimedOutError as e3:
-		return gatewayTimeoutRequest()
+	url = 'http://api.elsevier.com:80/content/search/scopus?query=title(%s)&apiKey=%s' %(DocTitle, apiKey)
+	return Response(url, "documents")
     
 def url_fix(s, charset='utf-8'):
     #"""Sometimes you get an URL by a user that just isn't a real
@@ -184,7 +140,8 @@ def parseAuthor(sciverse):
 
 				#setinfo
 				author.scopus_eid = sciverseItem.get("eid")
-				author.scopus_author_uid = sciverseItem.get('dc:identifier')
+				auth_uId = sciverseItem.get('dc:identifier').replace('AUTHOR_ID:', '', 1)
+				author.scopus_author_uid = auth_uId
 				author.surname = sciverseName.get('surname')
 				author.given_name = sciverseName.get('given-name')
 				author.initials = sciverseName.get('initials')
@@ -242,7 +199,8 @@ def parseDocuments(sciverse):
 				sciverseLinks = sciverseItem.get('link',{})
 				
 				#setinfo
-				doc.scopus_document_uid= sciverseItem.get('prism:doi')
+				docId = sciverseItem.get('dc:identifier').replace('SCOPUS_ID:', '', 1)
+				doc.scopus_document_uid = docId
 				doc.scopus_eid = sciverseItem.get('eid')
 				doc.title= sciverseItem.get('dc:title')
 				doc.author= sciverseItem.get('dc:creator')			
@@ -253,33 +211,33 @@ def parseDocuments(sciverse):
 				doc.pageRange = sciverseItem.get('prism:pageRange')
 				doc.coverDate= sciverseItem.get('prism:coverDate')
 				doc.coverDisplayDate = sciverseItem.get('prism:coverDisplayDate')
-				doc.doi= sciverseItem.get('dc:title')
+				doc.doi= sciverseItem.get('prism:doi')
 				doc.citedby_count = sciverseItem.get('citedby-count')
 				for Afill_iter in sciverseAffiliation:
-				    setAfills ={} 
-				    setAfills["affilname"] = Afill_iter.get("affilname")
-				    setAfills["affiliation-city"] = Afill_iter.get("affiliation-city")
-				    setAfills["affiliation_country"] = Afill_iter.get("affiliation_country")
+				    Afills ={} 
+				    Afills["affilname"] = Afill_iter.get("affilname")
+				    Afills["affiliation-city"] = Afill_iter.get("affiliation-city")
+				    Afills["affiliation_country"] = Afill_iter.get("affiliation_country")
 				    #add to list in json
-				    doc.affiliations.append(setAfills)				
+				    doc.affiliations.append(Afills)				
 				doc.aggregationType = sciverseItem.get('prism:aggregationType')
 				doc.subtypeDescription =sciverseItem.get('subtypeDescription')
 				for link_iter in sciverseLinks:
-				    setAfills ={} 
-				    setAfills["link"] = link_iter.get("@href")
+				    Links ={} 
+				    Links["link"] = link_iter.get("@href")
 				    #add to list in json
-				    doc.links.append(setAfills)	
+				    doc.links.append(Links)	
 				entry.append(doc)
 
 	results["entry"] = entry
 	return json.dumps(results, indent=4, default=jdefault)
 
-def parseAffil(jsonAffil):
-	class Affiliation(object):
+def parseInstitution(jsonInstit):
+	class Institution(object):
 
 		def __init__(self):
-			self.scopus_affiliation_id = ""
-			self.affiliation_name = ""
+			self.scopus_Instit_id = ""
+			self.Instit_name = ""
 			self.document_count = 0
 			self.author_count = 0
 			self.city = ""
@@ -292,54 +250,72 @@ def parseAffil(jsonAffil):
 
 	res = {}
 	entry = []
-	newJsonAffil = jsonAffil.copy()
-	if newJsonAffil.get('search-results'):
-		if newJsonAffil['search-results'].get('opensearch:totalResults'):
-			totalResults = newJsonAffil['search-results']['opensearch:totalResults']
+	newJsonInstit = jsonInstit.copy()
+	if newJsonInstit.get('search-results'):
+		if newJsonInstit['search-results'].get('opensearch:totalResults'):
+			totalResults = newJsonInstit['search-results']['opensearch:totalResults']
 			res['totalResults'] = totalResults
 			if (totalResults != '0'):
-				for item in newJsonAffil['search-results']['entry']:
-					affil = Affiliation()
-					affilId = item.get('dc:identifier').replace('AFFILIATION_ID:', '', 1)
-					affil.scopus_affiliation_id = affilId
-					affil.affiliation_name = item.get('affiliation-name')
-					affil.document_count = item.get('document-count')
-					affil.city = item.get('city')
-					affil.country = item.get('country')
+				for item in newJsonInstit['search-results']['entry']:
+					Instit = Institution()
+					InstitId = item.get('dc:identifier').replace('AFFILIATION_ID:', '', 1)
+					Instit.scopus_Instit_id = InstitId
+					Instit.Instit_name = item.get('affiliation-name')
+					Instit.document_count = item.get('document-count')
+					Instit.city = item.get('city')
+					Instit.country = item.get('country')
 					if (item.get('link')):
 						for link in item['link']:
 							if (link['@ref'] == 'scopus-affiliation'):
-								affil.scopus_link = link['@href']
+								Instit.scopus_link = link['@href']
 					try:
-						if(affilId != ''):
-							parseRetrievalAffil(affil, affilId)
+						if(InstitId != ''):
+							parseRetrievalInstit(Instit, InstitId)
 					except Exception as e:
 					 	pass
-					entry.append(affil)
-				res['affiliations'] = entry
+					entry.append(Instit)
+				res['Institutions'] = entry
 	return json.dumps(res, indent=4, default=jdefault)
 
-def parseRetrievalAffil(affil, affilId):
-	affilRetrievalUrl = 'http://api.elsevier.com/content/affiliation/affiliation_id/%s' %(affilId)
-	affilRetrievalUrl  += '?apiKey=%s' %(apiKey)
-	jsonAffilRetrieval = sciverseResponse(affilRetrievalUrl)
-	newJsonRetrievalAffil = jsonAffilRetrieval.copy()
+def parseRetrievalInstit(Instit, InstitId):
+	InstitRetrievalUrl = 'http://api.elsevier.com/content/affiliation/affiliation_id/%s' %(InstitId)
+	InstitRetrievalUrl  += '?apiKey=%s' %(apiKey)
+	jsonInstitRetrieval = sciverseResponse(InstitRetrievalUrl)
+	newJsonRetrievalInstit = jsonInstitRetrieval.copy()
 	
-	if newJsonRetrievalAffil.get('affiliation-retrieval-response'):
-		affil.address = newJsonRetrievalAffil['affiliation-retrieval-response'].get('address')
-		if newJsonRetrievalAffil['affiliation-retrieval-response'].get('coredata'):
-			affil.author_count = newJsonRetrievalAffil['affiliation-retrieval-response']['coredata'].get('author-count')
-		if newJsonRetrievalAffil['affiliation-retrieval-response'].get('institution-profile'):
-			affil.org_URL = newJsonRetrievalAffil['affiliation-retrieval-response']['institution-profile'].get('org-URL')
-			if newJsonRetrievalAffil['affiliation-retrieval-response']['institution-profile'].get('address'):
-				affil.postal_code = newJsonRetrievalAffil['affiliation-retrieval-response']['institution-profile']['address'].get('postal-code')
-				affil.state = newJsonRetrievalAffil['affiliation-retrieval-response']['institution-profile']['address'].get('state')
+	if newJsonRetrievalInstit.get('affiliation-retrieval-response'):
+		Instit.address = newJsonRetrievalInstit['affiliation-retrieval-response'].get('address')
+		if newJsonRetrievalInstit['affiliation-retrieval-response'].get('coredata'):
+			Instit.author_count = newJsonRetrievalInstit['affiliation-retrieval-response']['coredata'].get('author-count')
+		if newJsonRetrievalInstit['affiliation-retrieval-response'].get('institution-profile'):
+			Instit.org_URL = newJsonRetrievalInstit['affiliation-retrieval-response']['institution-profile'].get('org-URL')
+			if newJsonRetrievalInstit['affiliation-retrieval-response']['institution-profile'].get('address'):
+				Instit.postal_code = newJsonRetrievalInstit['affiliation-retrieval-response']['institution-profile']['address'].get('postal-code')
+				Instit.state = newJsonRetrievalInstit['affiliation-retrieval-response']['institution-profile']['address'].get('state')
 
 def jdefault(o):
     return o.__dict__
 
+def Response(url, Type, urlEncode=True):
+	try:
+		jsonReply = sciverseResponse(url, urlEncode)
+		if Type == "author":
+			return parseAuthor(jsonReply)
+		elif Type == "institute":
+			return parseInstitution(jsonReply)
+		elif Type == "documents":
+			return parseDocuments(jsonReply)
+		else:
+			return severErrorRequest()
+	except severError as e1:
+		return severErrorRequest()
+	except gatewayError as e2:
+		return badGatewayRequest()
+	except gatewayTimedOutError as e3:
+		return gatewayTimeoutRequest()
+
 @app.route('/api/getAuthor/')
-@app.route('/api/getAffiliation/')
+@app.route('/api/getInstitution/')
 @app.route('/api/getDocumentsByAuthorID/')
 @app.route('/api/getDocumentsByTitle/')
 def malformedRequest():
@@ -383,13 +359,6 @@ def handleError(code, message):
 	resp = jsonify(res)
 	resp.status_code = code
 	return resp
-
-def validName(string):
-	#check if valid string
-	namePattern = re.compile("^([a-zA-Z])+$")
-	if not namePattern.match(string):
-		return False
-	return True
 
 if __name__ == '__main__':
 	# To start a local development server for debugging purposes
