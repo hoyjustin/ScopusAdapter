@@ -132,7 +132,7 @@ def sciverseResponse(url, urlfix=True):
         #if contained unicode character, fix the url
         if urlfix:
 	    url = url_fix(url)
-	request = Request(url)
+	request = Request(url, headers={"Accept" : "application/json"})
 	try:
 		response = urlopen(request)
 		if(response.getcode() == 0):
@@ -141,7 +141,7 @@ def sciverseResponse(url, urlfix=True):
 		if(response.getcode() == 502):
 			# Bad gatway error on Scopus API
 			raise gatewayError('502 - Bad Gateway Error')
-		if(response.getcode() == 502):
+		if(response.getcode() == 504):
 			# Timed out error on Scopus API
 			raise gatewayTimedOutError('504 - Gateway Timed Out')
 		reply = response.read()
@@ -300,31 +300,40 @@ def parseAffil(jsonAffil):
 			if (totalResults != '0'):
 				for item in newJsonAffil['search-results']['entry']:
 					affil = Affiliation()
-					affil.scopus_affiliation_id = item.get('dc:identifier')
+					affilId = item.get('dc:identifier').replace('AFFILIATION_ID:', '', 1)
+					affil.scopus_affiliation_id = affilId
 					affil.affiliation_name = item.get('affiliation-name')
 					affil.document_count = item.get('document-count')
-					affil.author_count = item.get('affiliation-name')
 					affil.city = item.get('city')
 					affil.country = item.get('country')
 					if (item.get('link')):
 						for link in item['link']:
 							if (link['@ref'] == 'scopus-affiliation'):
 								affil.scopus_link = link['@href']
-						entry.append(affil)
-					#TODO query other affiliation api
+					try:
+						if(affilId != ''):
+							parseRetrievalAffil(affil, affilId)
+					except Exception as e:
+					 	pass
+					entry.append(affil)
 				res['affiliations'] = entry
 	return json.dumps(res, indent=4, default=jdefault)
 
 def parseRetrievalAffil(affil, affilId):
-	authorRetrievalUrl = 'http://api.elsevier.com:80/content/affiliation/affiliation_id/%s?' %affilId
-	authorRetrievalUrl += 'apiKey=%s' %apiKey
-	jsonAffilRetrieval = sciverseResponse(authorRetrievalUrl)
+	affilRetrievalUrl = 'http://api.elsevier.com/content/affiliation/affiliation_id/%s' %(affilId)
+	affilRetrievalUrl  += '?apiKey=%s' %(apiKey)
+	jsonAffilRetrieval = sciverseResponse(affilRetrievalUrl)
 	newJsonRetrievalAffil = jsonAffilRetrieval.copy()
+	
 	if newJsonRetrievalAffil.get('affiliation-retrieval-response'):
-		affil.address = newJsonRetrievalAffil['affiliation-retrieval-response'].get('address', '')
+		affil.address = newJsonRetrievalAffil['affiliation-retrieval-response'].get('address')
+		if newJsonRetrievalAffil['affiliation-retrieval-response'].get('coredata'):
+			affil.author_count = newJsonRetrievalAffil['affiliation-retrieval-response']['coredata'].get('author-count')
 		if newJsonRetrievalAffil['affiliation-retrieval-response'].get('institution-profile'):
-			affil.postal_code = newJsonRetrievalAffil['affiliation-retrieval-response']['institution-profile'].get('postal-code', '')
-			affil.org_URL = newJsonRetrievalAffil['affiliation-retrieval-response']['institution-profile'].get('org-URL', '')
+			affil.org_URL = newJsonRetrievalAffil['affiliation-retrieval-response']['institution-profile'].get('org-URL')
+			if newJsonRetrievalAffil['affiliation-retrieval-response']['institution-profile'].get('address'):
+				affil.postal_code = newJsonRetrievalAffil['affiliation-retrieval-response']['institution-profile']['address'].get('postal-code')
+				affil.state = newJsonRetrievalAffil['affiliation-retrieval-response']['institution-profile']['address'].get('state')
 
 def jdefault(o):
     return o.__dict__
@@ -338,7 +347,7 @@ def malformedRequest():
 
 @app.errorhandler(500)
 def customServerError(e):
-	return severErrorRequest()
+ 	return severErrorRequest()
 
 def severErrorRequest():
 	return handleError(500, 'Internal Server Error - The server encountered an unexpected condition which prevented it from fulfilling the request')
@@ -384,6 +393,7 @@ def validName(string):
 
 if __name__ == '__main__':
 	# To start a local development server for debugging purposes
-	# app.run(debug=True)
+	app.run(debug=True)
 	
-	app.run(host='0.0.0.0', port=5000)
+	# For actual deployment purposes
+	# app.run(host='0.0.0.0', port=5000)
