@@ -1,5 +1,27 @@
-from flask import jsonify
+from flask import jsonify, request
+from functools import wraps
 
+
+# global passphrases
+username = 'cmput402'
+password = 'qpskcnvb'
+apiKey= '6492f9c867ddf3e84baa10b5971e3e3d'
+
+# Authenticate for adapter use
+# ie) curl -v -u "cmput402:qpskcnvb" http://127.0.0.1:5000/api/getAuthor/<authFirst>&<authLast>
+def requires_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth = request.authorization
+        if not auth: 
+            return unauthorizedRequest()
+        elif not check_auth(auth.username, auth.password):
+            return unauthorizedRequest()
+        return f(*args, **kwargs)
+    return decorated
+
+def check_auth(usernameInput, passwordInput):
+    return (usernameInput == username) and (passwordInput == password)
 
 def malformedRequest():
 	return handleError(400, 'Bad Request - The request could not be understood by the server due to malformed syntax')

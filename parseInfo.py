@@ -1,4 +1,15 @@
-import json
+from urllib2 import Request, urlopen, URLError
+import urllib, urlparse, json, errorHandler
+from errorHandler import gatewayTimeoutRequest, badGatewayRequest, severErrorRequest, requires_auth, apiKey
+
+#names
+author = "author"
+institute= "insitute"
+documents = "documents"
+
+class severError( Exception ): pass
+class gatewayError( Exception ): pass
+class gatewayTimedOutError( Exception ): pass
 
 def parseAuthor(sciverse):
 	class Author(object):
@@ -155,36 +166,98 @@ def parseInstitution(jsonInstit):
 					Instit.scopus_Instit_id = InstitId
 					Instit.Instit_name = item.get('affiliation-name')
 					Instit.document_count = item.get('document-count')
-					Instit.city = item.get('city')
-					Instit.country = item.get('country')
 					if (item.get('link')):
 						for link in item['link']:
 							if (link['@ref'] == 'scopus-affiliation'):
 								Instit.scopus_link = link['@href']
 					try:
 						if(InstitId != ''):
-							parseRetrievalInstit(Instit, InstitId)
+							parse_set_Instit(Instit, InstitId)
 					except Exception as e:
 					 	pass
 					entry.append(Instit)
 				res['Institutions'] = entry
 	return json.dumps(res, indent=4, default=jdefault)
 
-def parseRetrievalInstit(Instit, InstitId):
+def parse_set_Instit(Instit, InstitId):
 	InstitRetrievalUrl = 'http://api.elsevier.com/content/affiliation/affiliation_id/%s' %(InstitId)
 	InstitRetrievalUrl  += '?apiKey=%s' %(apiKey)
 	jsonInstitRetrieval = sciverseResponse(InstitRetrievalUrl)
 	newJsonRetrievalInstit = jsonInstitRetrieval.copy()
 	
-	if newJsonRetrievalInstit.get('affiliation-retrieval-response'):
-		Instit.address = newJsonRetrievalInstit['affiliation-retrieval-response'].get('address')
-		if newJsonRetrievalInstit['affiliation-retrieval-response'].get('coredata'):
-			Instit.author_count = newJsonRetrievalInstit['affiliation-retrieval-response']['coredata'].get('author-count')
-		if newJsonRetrievalInstit['affiliation-retrieval-response'].get('institution-profile'):
-			Instit.org_URL = newJsonRetrievalInstit['affiliation-retrieval-response']['institution-profile'].get('org-URL')
-			if newJsonRetrievalInstit['affiliation-retrieval-response']['institution-profile'].get('address'):
-				Instit.postal_code = newJsonRetrievalInstit['affiliation-retrieval-response']['institution-profile']['address'].get('postal-code')
-				Instit.state = newJsonRetrievalInstit['affiliation-retrieval-response']['institution-profile']['address'].get('state')
+	#shortcut names
+	entry = newJsonRetrievalInstit.get('affiliation-retrieval-response', {})
+	institProfile = entry.get('institution-profile',{})
+	institCoreData = entry.get('coredata',{})
+	institAddress = institProfile.get('address',{})
+
+	#setinfo
+	Instit.address = entry.get('address')
+	Instit.author_count = institCoreData.get('author-count')
+	Instit.org_URL = institProfile.get('org-URL')
+	Instit.postal_code = institAddress.get('postal-code')
+	Instit.state = institAddress.get('state')
+	Instit.city = institAddress.get('city')
+	Instit.country = institAddress.get('country')
+
 
 def jdefault(o):
     return o.__dict__
+
+
+def url_fix(s, charset='utf-8'):
+    #"""Sometimes you get an URL by a user that just isn't a real
+    #URL because it contains unsafe characters like ' ' and so on.  This
+    #function can fix some of the problems in a similar way browsers
+    #handle data entered by the user:
+    #:param charset: The target charset for the URL if the url was
+                    #given as unicode string.
+    #"""
+    if isinstance(s, unicode):
+        s = s.encode(charset, 'ignore')
+    scheme, netloc, path, qs, anchor = urlparse.urlsplit(s)
+    path = urllib.quote(path, '/%')
+    qs = urllib.quote_plus(qs, ':&=')
+    return urlparse.urlunsplit((scheme, netloc, path, qs, anchor))
+
+def sciverseResponse(url, urlfix=True):
+        #if contained unicode character, fix the url
+        if urlfix:
+	    url = url_fix(url)
+	request = Request(url, headers={"Accept" : "application/json"})
+	try:
+		response = urlopen(request)
+		if(response.getcode() == 0):
+			# Internal server error on Scopus API
+			raise severError('500 - Internal Server Error')
+		if(response.getcode() == 502):
+			# Bad gatway error on Scopus API
+			raise gatewayError('502 - Bad Gateway Error')
+		if(response.getcode() == 504):
+			# Timed out error on Scopus API
+			raise gatewayTimedOutError('504 - Gateway Timed Out')
+		reply = response.read()
+		jsonReply = json.loads(reply)
+		return jsonReply
+	except URLError, e:
+		# urllib2 IO Error
+		raise severError('500 - Internal Server Error')
+
+def Response(url, Type, urlEncode=True):
+	try:
+		jsonReply = sciverseResponse(url, urlEncode)
+		if Type == author:
+			return parseAuthor(jsonReply)
+		elif Type == institute:
+			return parseInstitution(jsonReply)
+		elif Type == documents:
+			return parseDocuments(jsonReply)
+		else:
+			return severErrorRequest()
+	except severError as e1:
+		return severErrorRequest()
+	except gatewayError as e2:
+		return badGatewayRequest()
+	except gatewayTimedOutError as e3:
+		return gatewayTimeoutRequest()
+
