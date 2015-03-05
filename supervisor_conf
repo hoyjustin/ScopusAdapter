@@ -1,5 +1,5 @@
-[program:sciverse_adaptor]
-command = gunicorn app:app -b localhost:8000
-directory = /402sciverse
-user = nobody
-
+[program:402sciverse]
+command = sudo nohup gunicorn serverSciverse:app -b 0.0.0.0:8080 &
+stopasgroup=true
+user = root
+startsecs=0
