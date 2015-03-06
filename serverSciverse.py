@@ -1,10 +1,28 @@
 #!flask/bin/python
+
+'''
+:copyright: (C) 2015 by Nhu Bui, Justin Hoy
+#:license:   MIT/X11, see LICENSE for more details.
+'''
+
 from flask import Flask, url_for, jsonify, request
 import errorHandler, parseInfo
 from parseInfo import Response
 from errorHandler import requires_auth, apiKey
 
+#CORS enabled
+try:
+    from flask.ext.cors import CORS  # The typical way to import flask-cors
+except ImportError:
+    # Path hack allows examples to be run without installation.
+    import os
+    parentdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    os.sys.path.insert(0, parentdir)
+
+    from flask.ext.cors import CORS
+
 app = Flask(__name__)
+cors = CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 @app.route('/api/getAuthor/<authFirst>/<authLast>')
 @requires_auth
@@ -64,8 +82,7 @@ def customBadGateway(e):
 
 
 if __name__ == '__main__':
-	# To start a local development server for debugging purposes
-	# app.run(debug=True)
+	#testing purposes
+	app.debug = True
 	
-	# For actual deployment purposes
-	 app.run(host='0.0.0.0', port=8000)
+	app.run(host='0.0.0.0', port=8000)

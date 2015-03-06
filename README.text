@@ -1,28 +1,13 @@
 Author: Nhu Bui, Justin Hoy
 Copyright 2015
 
-Deployment Instructions 
 
 Install Dependencies:
 $ sudo apt-get update
-$ sudo apt-get install -y python python-dev python-pip nginx gunicorn supervisor git
+$ sudo apt-get install -y python python-dev python-pip 
+$ pip install -U flask-cors
 
-Install Flask
-$ pip install flask
+run Server
+$ python serverSciverse.py
 
-Setup Nginx Web Server
-$ sudo mv /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/default.old
-$ sudo cp ~/402sciverse/ngingx_conf /etc/nginx/sites-available/402sciverse
-$ sudo ln -s /etc/nginx/sites-available/402sciverse /etc/nginx/sites-enabled/402sciverse
-$ sudo /etc/init.d/nginx restart
-
-Set Up Gunicorn/Supervisor
-$ sudo cp ~/402sciverse/supervisor_conf /etc/supervisor/conf.d/402sciverse.conf
-
-Launch Gunicorn with Supervisor
-$ sudo supervisorctl reread
-$ sudo supervisorctl update
-$ sudo supervisorctl start 402sciverse
-$ sudo nohup gunicorn serverSciverse:app -b 127.0.0.1:8080 &
-
-Nginx will allow accessibility of the adapter through port: 80 of dynamic IP: 129.128.184.88, which in turn forwards requests to port 8080 of Gunicorn and 8000 of our Flask server
+It can be accessed with port 8000
