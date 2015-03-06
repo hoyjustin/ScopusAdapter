@@ -1,6 +1,10 @@
-from flask import jsonify, request
+from flask import jsonify, request, Response
 from functools import wraps
 
+'''
+:copyright: (C) 2015 by Nhu Bui, Justin Hoy
+#:license:   MIT/X11, see LICENSE for more details.
+'''
 
 # global passphrases
 username = 'cmput402'
@@ -13,12 +17,17 @@ def requires_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
         auth = request.authorization
-        if not auth: 
-            return unauthorizedRequest()
-        elif not check_auth(auth.username, auth.password):
-            return unauthorizedRequest()
+        if not auth or not check_auth(auth.username, auth.password):
+            return authenticate()
         return f(*args, **kwargs)
     return decorated
+
+def authenticate():
+    """Sends a 401 response that enables basic auth"""
+    return Response(
+    'Could not verify your access level for that URL.\n'
+    'You have to login with proper credentials', 401,
+    {'WWW-Authenticate': 'Basic realm="Login Required"'})
 
 def check_auth(usernameInput, passwordInput):
     return (usernameInput == username) and (passwordInput == password)

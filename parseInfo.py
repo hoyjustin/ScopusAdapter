@@ -2,6 +2,11 @@ from urllib2 import Request, urlopen, URLError
 import urllib, urlparse, json, errorHandler
 from errorHandler import gatewayTimeoutRequest, badGatewayRequest, severErrorRequest, requires_auth, apiKey
 
+'''
+:copyright: (C) 2015 by Nhu Bui, Justin Hoy
+#:license:   MIT/X11, see LICENSE for more details.
+'''
+
 #names
 author = "author"
 institute= "insitute"
@@ -101,10 +106,10 @@ def parseDocuments(sciverse):
 				#shortcut names
 				sciverseAffiliation = sciverseItem.get('affiliation',{} )
 				sciverseLinks = sciverseItem.get('link',{})
+				Id= sciverseItem.get('dc:identifier','')
 				
 				#setinfo
-				docId = sciverseItem.get('dc:identifier').replace('SCOPUS_ID:', '', 1)
-				doc.scopus_document_uid = docId
+				doc.scopus_document_uid = Id.replace('SCOPUS_ID:', '', 1)
 				doc.scopus_eid = sciverseItem.get('eid')
 				doc.title= sciverseItem.get('dc:title')
 				doc.author= sciverseItem.get('dc:creator')			
@@ -151,6 +156,7 @@ def parseInstitution(jsonInstit):
 			self.address = ""
 			self.org_URL = ""
 			self.scopus_link = ""
+			self.parent_Affil_id =""
 
 	res = {}
 	entry = []
@@ -162,24 +168,22 @@ def parseInstitution(jsonInstit):
 			if (totalResults != '0'):
 				for item in newJsonInstit['search-results']['entry']:
 					Instit = Institution()
-					InstitId = item.get('dc:identifier').replace('AFFILIATION_ID:', '', 1)
+					InstitId = item.get('dc:identifier', '').replace('AFFILIATION_ID:', '', 1)
 					Instit.scopus_Instit_id = InstitId
-					Instit.Instit_name = item.get('affiliation-name')
-					Instit.document_count = item.get('document-count')
 					if (item.get('link')):
 						for link in item['link']:
 							if (link['@ref'] == 'scopus-affiliation'):
 								Instit.scopus_link = link['@href']
 					try:
 						if(InstitId != ''):
-							parse_set_Instit(Instit, InstitId)
+							parseInstitByID(Instit, InstitId)
 					except Exception as e:
 					 	pass
 					entry.append(Instit)
 				res['Institutions'] = entry
 	return json.dumps(res, indent=4, default=jdefault)
 
-def parse_set_Instit(Instit, InstitId):
+def parseInstitByID(Instit, InstitId):
 	InstitRetrievalUrl = 'http://api.elsevier.com/content/affiliation/affiliation_id/%s' %(InstitId)
 	InstitRetrievalUrl  += '?apiKey=%s' %(apiKey)
 	jsonInstitRetrieval = sciverseResponse(InstitRetrievalUrl)
@@ -193,7 +197,10 @@ def parse_set_Instit(Instit, InstitId):
 
 	#setinfo
 	Instit.address = entry.get('address')
+	Instit.Instit_name = entry.get('affiliation-name')
 	Instit.author_count = institCoreData.get('author-count')
+	Instit.parent_Affil_id = institCoreData.get('parent-affiliation-id')
+	Instit.document_count = institCoreData.get('document-count')
 	Instit.org_URL = institProfile.get('org-URL')
 	Instit.postal_code = institAddress.get('postal-code')
 	Instit.state = institAddress.get('state')
