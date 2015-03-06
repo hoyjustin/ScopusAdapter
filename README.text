@@ -11,7 +11,6 @@ Install Flask
 $ pip install flask
 
 Setup Nginx Web Server
-$ sudo /etc/init.d/nginx start
 $ sudo mv /etc/nginx/sites-enabled/default /etc/nginx/sites-enabled/default.old
 $ sudo cp ~/402sciverse/ngingx_conf /etc/nginx/sites-available/402sciverse
 $ sudo ln -s /etc/nginx/sites-available/402sciverse /etc/nginx/sites-enabled/402sciverse
@@ -19,10 +18,11 @@ $ sudo /etc/init.d/nginx restart
 
 Set Up Gunicorn/Supervisor
 $ sudo cp ~/402sciverse/supervisor_conf /etc/supervisor/conf.d/402sciverse.conf
+
 Launch Gunicorn with Supervisor
 $ sudo supervisorctl reread
 $ sudo supervisorctl update
 $ sudo supervisorctl start 402sciverse
+$ sudo nohup gunicorn serverSciverse:app -b 127.0.0.1:8080 &
 
-Flask will then be bound to port: 8000 of dynamic IP: 129.128.184.88
-
+Nginx will allow accessibility of the adapter through port: 80 of dynamic IP: 129.128.184.88, which in turn forwards requests to port 8080 of Gunicorn and 8000 of our Flask server
