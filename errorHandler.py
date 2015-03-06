@@ -27,12 +27,11 @@ def authenticate():
     """Sends a 401 response that enables basic auth"""
     data = {
 	"errors": [
-        	{'message'  : '401 -Unauthorized Request - \
-			Please authenticate using a correct user and password combination'}
+        	{'message'  : '401 -Unauthorized Request - Please authenticate using a correct user and password combination'}
 	]
     }
     js = json.dumps(data)
-    return Response(js, 401,
+    return Response(js+"\n", 401,
     {'WWW-Authenticate': 'Basic realm="Login Required"'})
 
 def check_auth(usernameInput, passwordInput):
