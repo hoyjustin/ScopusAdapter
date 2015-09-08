@@ -11,4 +11,4 @@ $ pip install -U flask-cors
 run Server
 $ python serverSciverse.py
 
-It can be accessed with port 8000
+This application can be accessed with port 8000
